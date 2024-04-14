@@ -36,6 +36,7 @@ from zoedepth.utils.config import change_dataset, get_config, ALL_EVAL_DATASETS,
 from zoedepth.utils.misc import (RunningAverageDict, colors, compute_metrics,
                         count_parameters)
 
+import sys
 
 @torch.no_grad()
 def infer(model, images, **kwargs):
@@ -73,10 +74,12 @@ def evaluate(model, test_loader, config, round_vals=True, round_precision=3):
             if not sample['has_valid_depth']:
                 continue
         image, depth = sample['image'], sample['depth']
-        image, depth = image.cuda(), depth.cuda()
+        # image, depth = image.cuda(), depth.cuda()
         depth = depth.squeeze().unsqueeze(0).unsqueeze(0)
+        # focal = sample.get('focal', torch.Tensor(
+        #     [715.0873]).cuda())  # This magic number (focal) is only used for evaluating BTS model
         focal = sample.get('focal', torch.Tensor(
-            [715.0873]).cuda())  # This magic number (focal) is only used for evaluating BTS model
+            [715.0873]))  # This magic number (focal) is only used for evaluating BTS model
         pred = infer(model, image, dataset=sample['dataset'][0], focal=focal)
 
         # Save image, depth, pred for visualization
@@ -111,12 +114,28 @@ def evaluate(model, test_loader, config, round_vals=True, round_precision=3):
 def main(config):
     model = build_model(config)
     test_loader = DepthDataLoader(config, 'online_eval').data
-    model = model.cuda()
+    # model = model.cuda()
     metrics = evaluate(model, test_loader, config)
+
+    eval_results_name = "eval_results.txt"
+
     print(f"{colors.fg.green}")
     print(metrics)
     print(f"{colors.reset}")
     metrics['#params'] = f"{round(count_parameters(model, include_all=True)/1e6, 2)}M"
+
+    # Open the file in append mode
+    with open(eval_results_name, 'a') as file:
+        # Write the metrics to the file
+        
+        metrics['#params'] = f"{round(count_parameters(model, include_all=True)/1e6, 2)}M"
+        print(metrics['#params'], file=file)
+        
+        # Optionally, you can format the output to make it more readable
+        for key, value in metrics.items():
+            print(f"{key}: {value}", file=file)
+
+    return metrics
     return metrics
 
 
